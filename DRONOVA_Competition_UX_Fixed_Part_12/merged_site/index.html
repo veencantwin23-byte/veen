@@ -1,0 +1,2423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DRONOVA — Interactive Drone Learning</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #07131F;
+    --bg-2: #0D2233;
+    --panel: rgba(18, 34, 55, 0.86);
+    --panel-strong: rgba(13, 28, 48, 0.95);
+    --cyan: #00E5FF;
+    --text: #FFFFFF;
+    --muted: #B8C7D9;
+    --surface: rgba(255,255,255,0.06);
+    --border: rgba(0, 229, 255, 0.25);
+    --shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+    /* Status colors — used throughout Quiz/Progress for correct/incorrect/warning states.
+       (Phase 6 fix: these were referenced everywhere since Phase 4 but never declared here,
+       so they silently resolved to nothing. Now the single source of truth for the whole app.) */
+    --good: #3dffa0;
+    --danger: #ff4d5e;
+    --amber: #ffb200;
+    /* Spacing & radius scale — new reusable tokens for consistency going forward */
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-pill: 999px;
+    --space-1: 6px; --space-2: 10px; --space-3: 16px; --space-4: 24px; --space-5: 32px;
+    /* Phase 10.3: additional radius/shadow tiers, consolidating values that
+       were previously repeated as raw numbers across many rules. Each new
+       token below maps to an EXACT pre-existing value (verified before
+       replacing), so this is pure naming consolidation -- zero visual change. */
+    --radius-xl: 22px;
+    --radius-2xl: 24px;
+    --shadow-sm: 0 8px 24px rgba(0,0,0,0.2);
+    --shadow-md: 0 24px 56px rgba(0,0,0,0.28);
+    --transition-normal: 0.25s ease;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { overflow-x: hidden; }
+  button, input, select, textarea { font-family: inherit; margin: 0; }
+  button { cursor: pointer; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text);
+    background: radial-gradient(circle at top, rgba(0, 229, 255, 0.06), transparent 22%), linear-gradient(180deg, #07131F 0%, #050D17 48%, #03070C 100%);
+    min-height: 100vh;
+  }
+
+  .app-shell {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 24px 32px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 22px;
+    border-radius: 18px;
+    background: rgba(8, 18, 34, 0.92);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: var(--shadow);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .brand img {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    border: 1px solid rgba(0, 229, 255, 0.18);
+    background: rgba(255,255,255,0.04);
+  }
+
+  .brand-title {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  .brand-title span { color: var(--cyan); }
+  .brand-sub {
+    font-size: 0.72rem;
+    letter-spacing: 0.28em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.95rem;
+    padding: 10px 14px;
+    border-radius: 999px;
+    transition: all 0.25s ease;
+  }
+
+  .nav a:hover {
+    color: var(--text);
+    background: rgba(0,229,255,0.12);
+  }
+
+  .action-btn {
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+
+  .action-btn:hover { transform: translateY(-1px); background: rgba(0,229,255,0.08); }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 16, 0.82);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 18px;
+  }
+
+  .modal-overlay.active {
+    display: flex;
+  }
+
+  .modal-card {
+    width: min(520px, 100%);
+    padding: 28px;
+    border-radius: var(--radius-2xl);
+    background: rgba(6, 18, 32, 0.98);
+    border: 1px solid rgba(0,229,255,0.18);
+    box-shadow: 0 36px 80px rgba(0,0,0,0.35);
+  }
+
+  .modal-card h3 {
+    font-family: 'Chakra Petch', sans-serif;
+    margin-bottom: 12px;
+    color: var(--cyan);
+  }
+
+  .modal-card p {
+    color: var(--muted);
+    line-height: 1.75;
+    margin-bottom: 22px;
+  }
+
+  .modal-field {
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .modal-field label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .modal-field input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .modal-field input:focus {
+    border-color: var(--cyan);
+    background: rgba(0,229,255,0.06);
+  }
+
+  .modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 18px;
+  }
+
+  .modal-actions button {
+    flex: 1 1 140px;
+    border-radius: 999px;
+    padding: 12px 18px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .modal-actions button.primary {
+    background: linear-gradient(135deg, var(--cyan), rgba(0,229,255,0.3));
+    color: #07131F;
+    border: none;
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 16px;
+    right: 18px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 24px;
+    margin-top: 24px;
+    align-items: stretch;
+  }
+
+  .hero-copy, .hero-stage, .card {
+    border-radius: var(--radius-2xl);
+    background: rgba(10, 21, 36, 0.92);
+    border: 1px solid rgba(0,229,255,0.12);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(24px);
+  }
+
+  .hero-copy {
+    padding: 32px 32px 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 560px;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--cyan);
+    font-size: 0.78rem;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+
+  .eyebrow::before {
+    content: '';
+    width: 32px;
+    height: 1px;
+    background: var(--cyan);
+  }
+
+  h1 {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: clamp(2.5rem, 4vw, 3.6rem);
+    line-height: 1.02;
+    margin-bottom: 18px;
+    letter-spacing: 0.04em;
+  }
+
+  .hero-copy p {
+    color: var(--muted);
+    line-height: 1.75;
+    font-size: 1rem;
+    max-width: 600px;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 28px;
+  }
+
+  .primary-btn {
+    background: linear-gradient(135deg, var(--cyan), rgba(0,229,255,0.4));
+    color: #07131F;
+    border: none;
+    box-shadow: 0 18px 40px rgba(0, 229, 255, 0.18);
+  }
+
+  .primary-btn:hover { transform: translateY(-1px); }
+
+  .secondary-btn {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.14);
+    color: var(--text);
+  }
+
+  .hero-stage {
+    position: relative;
+    min-height: 640px;
+    padding: 22px;
+    overflow: hidden;
+  }
+
+  .hero-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top right, rgba(0,229,255,0.14), transparent 36%);
+    pointer-events: none;
+  }
+
+  #view {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 560px;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    border: 1px solid rgba(0,229,255,0.18);
+    background: linear-gradient(180deg, rgba(3,10,22,0.98), rgba(6,16,32,0.96));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+
+  #view::before {
+    content: '3D drone preview';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.2);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  #view canvas,
+  #sketchfabView,
+  #droneViewerFrame {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
+    display: block;
+  }
+
+  #sketchfabView {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    border-radius: var(--radius-xl);
+    background: #030b16;
+    display: none;
+    z-index: 2;
+  }
+
+  #droneViewerFrame {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    border-radius: var(--radius-xl);
+    background: #04070a;
+    z-index: 2;
+  }
+
+  .viewerErrorState {
+    position: absolute; inset: 0; z-index: 6; border-radius: var(--radius-xl);
+    background: rgba(3, 11, 24, 0.96); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; padding: 30px;
+  }
+  .viewerErrorIcon { font-size: 2.4rem; margin-bottom: 10px; }
+  .viewerErrorTitle { font-family: 'Chakra Petch', sans-serif; font-size: 1.15rem; font-weight: 600; margin-bottom: 8px; }
+  .viewerErrorSub { font-size: 0.86rem; color: var(--muted); max-width: 380px; margin-bottom: 18px; line-height: 1.5; }
+
+  .viewer-hint {
+    position: absolute;
+    right: 18px;
+    bottom: 18px;
+    z-index: 5;
+    max-width: min(340px, calc(100% - 36px));
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  .viewer-hint summary {
+    list-style: none;
+    width: max-content;
+    margin-left: auto;
+    cursor: pointer;
+    user-select: none;
+    padding: 9px 13px;
+    border-radius: 999px;
+    background: rgba(3, 11, 24, 0.92);
+    border: 1px solid rgba(0,229,255,0.24);
+    color: var(--cyan);
+    box-shadow: var(--shadow-md);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .viewer-hint summary::-webkit-details-marker { display: none; }
+  .viewer-hint summary::before { content: '💡 '; }
+  .viewer-hint[open] summary { border-radius: 14px 14px 0 0; }
+  .viewer-hint .viewer-hint-content {
+    padding: 12px 14px;
+    border-radius: 14px 0 14px 14px;
+    background: rgba(3, 11, 24, 0.95);
+    border: 1px solid rgba(0,229,255,0.18);
+    box-shadow: var(--shadow-md);
+    line-height: 1.55;
+  }
+  .viewer-hint strong { color: var(--cyan); }
+
+  .stage-hud {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .pill {
+    background: rgba(1, 19, 32, 0.88);
+    border: 1px solid rgba(0,229,255,0.16);
+    padding: 10px 14px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+
+  .pill strong { color: var(--text); }
+
+  .controls {
+    position: absolute;
+    bottom: 18px;
+    left: 18px;
+    z-index: 5;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .controls button {
+    border: 1px solid rgba(0,229,255,0.24);
+    background: rgba(0,229,255,0.08);
+    color: var(--text);
+    cursor: pointer;
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 0.92rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .controls button:hover { transform: translateY(-1px); box-shadow: 0 16px 30px rgba(0,229,255,0.16); }
+
+  .controls button.active {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: rgba(0,229,255,0.12);
+    box-shadow: inset 0 0 0 1px rgba(0,229,255,0.12);
+  }
+
+  .info-card {
+    position: absolute;
+    right: 18px;
+    bottom: 18px;
+    z-index: 5;
+    width: min(320px, calc(100% - 36px));
+    padding: 18px;
+    border-radius: 18px;
+    background: rgba(3, 11, 24, 0.92);
+    border: 1px solid rgba(0,229,255,0.16);
+    box-shadow: var(--shadow-md);
+  }
+
+  .info-card h3 {
+    font-size: 1.05rem;
+    margin-bottom: 8px;
+    color: var(--cyan);
+  }
+
+  .info-card p {
+    font-size: 0.95rem;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .page-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .page-tab {
+    padding: 10px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--muted);
+    background: rgba(255,255,255,0.04);
+    cursor: pointer;
+    font-size: 0.92rem;
+    transition: all 0.2s ease;
+  }
+
+  .page-tab.active {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: rgba(0,229,255,0.12);
+    box-shadow: inset 0 0 0 1px rgba(0,229,255,0.14);
+  }
+
+  .page-panel {
+    display: none;
+    margin-top: 18px;
+    padding: 24px;
+    border-radius: var(--radius-2xl);
+    border: 1px solid rgba(0,229,255,0.12);
+    background: rgba(10, 21, 38, 0.92);
+    box-shadow: var(--shadow);
+  }
+
+  .page-panel.active {
+    display: block;
+    animation: dronovaPanelIn 0.32s ease;
+  }
+  @keyframes dronovaPanelIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .page-panel.active { animation: none; }
+  }
+
+  .page-panel h3 {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 1.6rem;
+    margin-bottom: 12px;
+    letter-spacing: 0.04em;
+  }
+
+  .page-links {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .page-action-btn {
+    border: 1px solid rgba(0,229,255,0.18);
+    background: rgba(0,229,255,0.06);
+    color: var(--text);
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .page-action-btn:hover {
+    transform: translateY(-1px);
+    background: rgba(0,229,255,0.14);
+  }
+
+  /* ---------- Button hierarchy (Phase 6) ----------
+     .page-action-btn is the default/secondary tier used throughout the app.
+     These modifiers layer on top of it for the few buttons that need more
+     or less visual weight — added via extra classes, so no existing
+     onclick/ID-based wiring anywhere in the app needed to change. */
+  .btn-primary {
+    background: var(--cyan);
+    border-color: var(--cyan);
+    color: #03141c;
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: #4eecff; }
+
+  .btn-tertiary {
+    background: transparent;
+    border-color: rgba(255,255,255,0.14);
+    color: var(--muted);
+  }
+  .btn-tertiary:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.25); color: var(--text); }
+
+  .model-space {
+    margin-top: 20px;
+    min-height: 260px;
+    border-radius: var(--radius-xl);
+    background: linear-gradient(180deg, rgba(3,10,22,0.98), rgba(10,23,42,0.96));
+    border: 1px dashed rgba(0,229,255,0.24);
+    display: grid;
+    place-items: center;
+    color: rgba(255,255,255,0.22);
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+  }
+
+  .progress-block {
+    display: grid;
+    gap: 18px;
+    margin-top: 20px;
+  }
+
+  .progress-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.95rem;
+    color: var(--muted);
+  }
+
+  .progress-bar {
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #00e5ff, #00aaff);
+  }
+
+  .quiz-grid {
+    display: grid;
+    gap: 18px;
+    margin-top: 18px;
+  }
+
+  .quiz-question,
+  .quiz-results {
+    padding: 22px;
+    border-radius: var(--radius-xl);
+    background: rgba(9,20,35,0.94);
+    border: 1px solid rgba(0,229,255,0.16);
+  }
+
+  .quiz-question button {
+    width: 100%;
+    text-align: left;
+  }
+
+  .page-panel p, .page-panel li {
+    color: var(--muted);
+    line-height: 1.75;
+  }
+
+  .page-panel ul {
+    padding-left: 18px;
+    margin-top: 12px;
+  }
+
+  .types-panel {
+    display: grid;
+    gap: 20px;
+  }
+
+  .types-header {
+    padding: 22px 22px 20px;
+    border-radius: var(--radius-2xl);
+    background: rgba(9, 20, 35, 0.94);
+    border: 1px solid rgba(0,229,255,0.16);
+  }
+
+  .types-header h3 {
+    margin: 0 0 8px;
+    font-size: 1.5rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .types-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.98rem;
+    line-height: 1.75;
+  }
+
+  .types-cards {
+    display: grid;
+    gap: 18px;
+  }
+
+  .types-card {
+    padding: 22px;
+    border-radius: var(--radius-xl);
+    background: rgba(6, 16, 28, 0.95);
+    border: 1px solid rgba(0,229,255,0.14);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.24);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .types-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 32px 80px rgba(0,0,0,0.30);
+  }
+
+  .types-card-title {
+    margin: 0 0 10px;
+    font-size: 1.08rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .types-card-desc {
+    margin: 0 0 16px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .types-card-visual {
+    margin: 0 0 18px;
+    min-height: 156px;
+    border-radius: var(--radius-xl);
+    background: linear-gradient(180deg, rgba(4, 12, 23, 0.98), rgba(10, 23, 42, 0.96));
+    border: 1px solid rgba(255,255,255,0.06);
+    display: grid;
+    place-items: center;
+    color: rgba(255,255,255,0.16);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .types-card-feature-list {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .types-card-feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+
+  .types-card-feature span {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #00e5ff, #00aaff);
+    box-shadow: 0 0 18px rgba(0,229,255,0.25);
+  }
+
+  .types-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 20px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--cyan), rgba(0,229,255,0.24));
+    color: #07131F;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    transition: transform 0.2s ease;
+  }
+
+  .types-cta:hover { transform: translateY(-1px); }
+
+  .part-toolbar {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 14px;
+  }
+
+  .part-list, .rotation-box {
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 16px;
+    background: rgba(255,255,255,0.03);
+  }
+
+  .part-list h4, .rotation-box h4 {
+    font-size: 0.98rem;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+
+  .part-option {
+    width: 100%;
+    text-align: left;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: rgba(255,255,255,0.03);
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .part-option:hover { background: rgba(0,229,255,0.06); border-color: rgba(0,229,255,0.16); }
+
+  .part-option.active {
+    border-color: var(--cyan);
+    color: var(--text);
+    background: rgba(0,229,255,0.08);
+  }
+
+  .rotation-row {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .rotation-row label {
+    font-size: 0.88rem;
+    color: var(--muted);
+  }
+
+  .rotation-row input {
+    width: 100%;
+  }
+
+  .card {
+    padding: 18px;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    position: relative;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .card:hover { transform: translateY(-2px); box-shadow: 0 28px 70px rgba(0,0,0,0.26); }
+
+  .card img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.16;
+    filter: grayscale(1);
+    pointer-events: none;
+  }
+
+  .card .inner {
+    position: relative;
+    z-index: 1;
+  }
+
+  .card h2 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+
+  .card p {
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.65;
+  }
+
+  .card .tag {
+    display: inline-flex;
+    margin-top: 12px;
+    color: var(--cyan);
+    font-size: 0.78rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 1080px) {
+    .hero { grid-template-columns: 1fr; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .page-panel { padding: 20px; }
+  }
+
+  @media (max-width: 720px) {
+    .app-shell { padding: 18px 16px 24px; }
+    .topbar { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .nav { gap: 8px; }
+    .hero-stage { min-height: 480px; }
+    #view { min-height: 420px; }
+    .hero-copy { min-height: auto; }
+    .page-nav { justify-content: flex-start; }
+    .types-card { padding: 18px; }
+    .part-toolbar { grid-template-columns: 1fr; }
+  }  /* ============ PHASE 2: LEARNING SYSTEM ============ */
+
+  .searchWrap{ position:relative; flex:1; max-width:360px; margin:0 18px; }
+  #globalSearch{ width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+    border-radius:999px; padding:10px 16px; color:var(--text); font-size:0.88rem; outline:none; }
+  #globalSearch:focus{ border-color:var(--cyan); background:rgba(0,229,255,0.06); }
+  #globalSearch::placeholder{ color:var(--muted); }
+  .searchResults{ position:absolute; top:calc(100% + 8px); left:0; right:0; z-index:40;
+    background:rgba(6,14,26,0.98); border:1px solid rgba(0,229,255,0.2); border-radius:14px;
+    box-shadow:var(--shadow); max-height:420px; overflow-y:auto; display:none; }
+  .searchResults.show{ display:block; }
+  .searchResults .srGroup{ padding:10px 14px 4px; font-size:0.7rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--cyan); }
+  .searchResults .srItem{ padding:10px 16px; cursor:pointer; border-top:1px solid rgba(255,255,255,0.06); }
+  .searchResults .srItem:hover{ background:rgba(0,229,255,0.08); }
+  .searchResults .srItem .srTitle{ font-size:0.9rem; color:var(--text); }
+  .searchResults .srItem .srSnippet{ font-size:0.78rem; color:var(--muted); margin-top:2px; line-height:1.4; }
+  .searchResults .srEmpty{ padding:16px; color:var(--muted); font-size:0.85rem; text-align:center; }
+
+  /* Dashboard */
+  .dashGrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin:18px 0 22px; }
+  .dashCard{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:16px 18px;
+    cursor:pointer; transition:all .2s ease; position:relative; overflow:hidden; }
+  .dashCard:hover{ border-color:var(--border); transform:translateY(-2px); }
+  .dashCard .dcIcon{ font-size:1.5rem; }
+  .dashCard .dcTitle{ font-family:'Chakra Petch',sans-serif; font-weight:600; margin:8px 0 4px; font-size:1.02rem; }
+  .dashCard .dcStatus{ font-size:0.78rem; color:var(--muted); }
+  .dashCard .dcBar{ height:5px; border-radius:3px; background:rgba(255,255,255,0.08); margin-top:10px; overflow:hidden; }
+  .dashCard .dcBarFill{ height:100%; background:var(--cyan); border-radius:3px; transition:width .3s ease; }
+  .dashCard.complete{ border-color:rgba(0,229,255,0.4); }
+  .dashCard.complete::after{ content:'✓'; position:absolute; top:14px; right:16px; color:var(--cyan); font-size:1.1rem; }
+  .dashCard.locked{ opacity:0.5; cursor:default; }
+  .recommendBanner{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    background:linear-gradient(120deg, rgba(0,229,255,0.12), rgba(0,229,255,0.02)); border:1px solid var(--border);
+    border-radius:16px; padding:16px 20px; margin-bottom:20px; }
+  .recommendBanner .rbLabel{ font-size:0.72rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--cyan); margin-bottom:4px; }
+  .recommendBanner .rbTitle{ font-family:'Chakra Petch',sans-serif; font-size:1.15rem; font-weight:600; }
+
+  /* Module section content (intro/types/mechanics/applications) */
+  .lessonBlock{ margin-bottom:18px; }
+  .lessonBlock h4{ font-family:'Chakra Petch',sans-serif; font-size:1.02rem; color:var(--cyan); margin-bottom:6px; }
+  .lessonBlock p{ font-size:0.94rem; }
+  .cardGrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin:16px 0; }
+  .infoCardSm{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:16px 18px; }
+  .infoCardSm .icTop{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .infoCardSm .icIcon{ font-size:1.3rem; }
+  .infoCardSm .icTitle{ font-family:'Chakra Petch',sans-serif; font-weight:600; }
+  .infoCardSm p{ font-size:0.86rem; color:var(--muted); margin:0; }
+
+  /* Types comparison */
+  .typeCard{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:18px 20px; margin-bottom:14px; }
+  .typeCard .tcHead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .typeCard .tcName{ font-family:'Chakra Petch',sans-serif; font-size:1.1rem; font-weight:700; }
+  .typeCard .tcTag{ font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--cyan);
+    background:rgba(0,229,255,0.1); padding:3px 10px; border-radius:999px; }
+  .typeCard .tcCols{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-top:12px; }
+  .typeCard .tcCol b{ display:block; font-size:0.72rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .typeCard .tcCol ul{ margin:0; padding-left:16px; font-size:0.84rem; }
+  @media (max-width:700px){ .typeCard .tcCols{ grid-template-columns:1fr; } }
+
+  /* Component explorer (Module 3) */
+  .subsystemGroup{ margin-bottom:22px; }
+  .subsystemGroup h4{ font-family:'Chakra Petch',sans-serif; font-size:0.85rem; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .compCard{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:16px 18px; margin-bottom:12px;
+    transition:border-color .2s; }
+  .compCard.highlighted{ border-color:var(--cyan); box-shadow:0 0 0 1px rgba(0,229,255,0.3), 0 0 24px rgba(0,229,255,0.15); }
+  .compCard .ccHead{ display:flex; align-items:center; gap:10px; cursor:pointer; }
+  .compCard .ccIcon{ font-size:1.2rem; }
+  .compCard .ccName{ font-family:'Chakra Petch',sans-serif; font-weight:600; flex:1; }
+  .compCard .ccChevron{ color:var(--muted); transition:transform .2s; font-size:0.8rem; }
+  .compCard.open .ccChevron{ transform:rotate(90deg); }
+  .compCard .ccBody{ display:none; margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06); }
+  .compCard.open .ccBody{ display:block; }
+  .compCard .ccQA{ margin-bottom:10px; }
+  .compCard .ccQA b{ display:block; font-size:0.78rem; color:var(--cyan); margin-bottom:2px; }
+  .compCard .ccQA p{ font-size:0.86rem; margin:0; }
+  .compCard .ccTip{ background:rgba(255,255,255,0.04); border-left:2px solid var(--cyan); padding:8px 12px; font-size:0.82rem;
+    border-radius:0 8px 8px 0; margin:10px 0; }
+  .compCard .ccActions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .exploreBtn{ background:rgba(0,229,255,0.12); border:1px solid var(--border); color:var(--cyan); font-size:0.82rem;
+    padding:8px 14px; border-radius:999px; cursor:pointer; transition:all .15s; }
+  .exploreBtn:hover{ background:rgba(0,229,255,0.22); }
+
+  /* Architecture flow diagrams */
+  .flowCard{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:18px 20px; margin-bottom:16px; }
+  .flowCard h4{ font-family:'Chakra Petch',sans-serif; margin-bottom:4px; }
+  .flowCard .flowDesc{ font-size:0.84rem; color:var(--muted); margin-bottom:14px; }
+  .flowRow{ display:flex; align-items:center; flex-wrap:wrap; gap:0; }
+  .flowStep{ background:rgba(0,229,255,0.08); border:1px solid var(--border); color:var(--text); font-size:0.86rem;
+    padding:9px 16px; border-radius:10px; white-space:nowrap; }
+  .flowArrow{ color:var(--cyan); font-size:1.1rem; margin:0 8px; }
+
+  /* Mechanics forces/axes */
+  .forceGrid, .axesGrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin:14px 0 22px; }
+
+  /* Progress dashboard */
+  .progressList{ margin-top:10px; }
+  .progressRow{ display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+  .progressRow .prIcon{ font-size:1.2rem; width:28px; text-align:center; }
+  .progressRow .prName{ flex:1; font-family:'Chakra Petch',sans-serif; font-weight:600; }
+  .progressRow .prBar{ width:140px; height:6px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden; }
+  .progressRow .prBarFill{ height:100%; background:var(--cyan); border-radius:3px; }
+  .progressRow .prPct{ width:44px; text-align:right; font-size:0.82rem; color:var(--muted); }
+  .progressRow.locked{ opacity:0.45; }
+
+  .markCompleteBtn{ margin-top:18px; background:rgba(0,229,255,0.1); border:1px solid var(--border); color:var(--cyan);
+    padding:10px 18px; border-radius:999px; cursor:pointer; font-size:0.85rem; transition:all .15s; }
+  .markCompleteBtn:hover{ background:rgba(0,229,255,0.2); }
+  .markCompleteBtn.done{ background:rgba(0,229,255,0.25); }
+  .archNote{ font-size:0.82rem; color:var(--muted); background:rgba(255,255,255,0.03); border-radius:10px; padding:10px 14px; margin-top:6px; }
+
+  /* ============ PHASE 4: QUIZ SYSTEM ============ */
+  .quizCatCard{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:18px 20px;
+    cursor:pointer; transition:all .2s ease; }
+  .quizCatCard:hover{ border-color:var(--border); transform:translateY(-2px); }
+  .quizCatCard .qcIcon{ font-size:1.6rem; }
+  .quizCatCard .qcTitle{ font-family:'Chakra Petch',sans-serif; font-weight:600; margin:8px 0 4px; font-size:1.05rem; }
+  .quizCatCard .qcDesc{ font-size:0.82rem; color:var(--muted); margin-bottom:10px; line-height:1.5; }
+  .quizCatCard .qcMeta{ display:flex; justify-content:space-between; font-size:0.74rem; color:var(--cyan); }
+  .quizCatCard .qcBest{ color:var(--muted); }
+
+  .quizSetupCard{ background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px; margin:16px 0; }
+  .quizSetupCard h4{ font-family:'Chakra Petch',sans-serif; margin-bottom:10px; }
+  .quizCountRow{ display:flex; align-items:center; gap:12px; margin:14px 0; }
+  .quizCountRow input[type=range]{ flex:1; accent-color:var(--cyan); }
+  .quizCountRow b{ color:var(--cyan); font-family:'Chakra Petch',sans-serif; min-width:26px; text-align:right; }
+
+  .quizProgressWrap{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; font-size:0.82rem; color:var(--muted); }
+  .quizProgressTrack{ height:6px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden; margin-bottom:18px; }
+  .quizProgressFill{ height:100%; background:var(--cyan); border-radius:3px; transition:width .3s ease; }
+
+  .quizQuestionCard{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:22px 24px; }
+  .quizQTag{ font-size:0.72rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--cyan); margin-bottom:8px; }
+  .quizQText{ font-family:'Chakra Petch',sans-serif; font-size:1.15rem; margin-bottom:16px; line-height:1.4; }
+  .quiz3dHint{ display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(0,229,255,0.06);
+    border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:0.82rem; color:var(--muted); }
+  .quiz3dHint button{ background:rgba(0,229,255,0.14); border:1px solid var(--border); color:var(--cyan); border-radius:999px;
+    padding:6px 12px; font-size:0.78rem; cursor:pointer; white-space:nowrap; }
+
+  .quizOptions{ display:flex; flex-direction:column; gap:10px; }
+  .quizOption{ display:flex; align-items:center; gap:12px; padding:13px 16px; border-radius:12px; border:1px solid rgba(255,255,255,0.1);
+    background:rgba(255,255,255,0.02); cursor:pointer; transition:all .15s; font-size:0.92rem; }
+  .quizOption:hover{ border-color:var(--border); background:rgba(0,229,255,0.05); }
+  .quizOption .qoMark{ width:22px; height:22px; border-radius:50%; border:1px solid rgba(255,255,255,0.25); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:0.7rem; }
+  .quizOption.selected{ border-color:var(--cyan); background:rgba(0,229,255,0.1); }
+  .quizOption.selected .qoMark{ border-color:var(--cyan); background:var(--cyan); color:#03141c; }
+  .quizOption.correct{ border-color:var(--good); background:rgba(61,255,160,0.1); }
+  .quizOption.correct .qoMark{ border-color:var(--good); background:var(--good); color:#03141c; }
+  .quizOption.incorrect{ border-color:var(--danger); background:rgba(255,77,94,0.1); }
+  .quizOption.incorrect .qoMark{ border-color:var(--danger); background:var(--danger); color:#fff; }
+  .quizOption.disabled{ pointer-events:none; opacity:0.85; }
+
+  .quizFeedback{ margin-top:18px; padding:16px 18px; border-radius:12px; display:none; }
+  .quizFeedback.show{ animation: dronovaPanelIn 0.3s ease; }
+  .quizFeedback.show{ display:block; }
+  .quizFeedback.correct{ background:rgba(61,255,160,0.08); border:1px solid var(--good); }
+  .quizFeedback.incorrect{ background:rgba(255,77,94,0.08); border:1px solid var(--danger); }
+  .quizFeedback .qfTitle{ font-family:'Chakra Petch',sans-serif; font-weight:700; margin-bottom:6px; font-size:1.02rem; }
+  .quizFeedback.correct .qfTitle{ color:var(--good); }
+  .quizFeedback.incorrect .qfTitle{ color:var(--danger); }
+  .quizFeedback p{ font-size:0.88rem; color:var(--muted); line-height:1.55; margin:0; }
+
+  .quizActionRow{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+
+  .quizResultHero{ text-align:center; padding:30px 20px; }
+  .quizResultHero .qrScore{ font-family:'Chakra Petch',sans-serif; font-size:3rem; font-weight:700; color:var(--cyan); }
+  .quizResultHero .qrPct{ font-size:1.3rem; color:var(--text); margin:4px 0 10px; }
+  .quizResultHero .qrLevel{ display:inline-block; font-size:0.85rem; letter-spacing:0.08em; text-transform:uppercase;
+    padding:6px 16px; border-radius:999px; background:rgba(0,229,255,0.12); border:1px solid var(--border); color:var(--cyan); }
+  .quizResultActions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:22px; }
+
+  .reviewItem{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:16px 18px; margin-bottom:12px; }
+  .reviewItem.correct{ border-left:3px solid var(--good); }
+  .reviewItem.incorrect{ border-left:3px solid var(--danger); }
+  .reviewItem .riQ{ font-family:'Chakra Petch',sans-serif; font-weight:600; margin-bottom:8px; }
+  .reviewItem .riRow{ font-size:0.84rem; margin-bottom:4px; }
+  .reviewItem .riRow.userWrong{ color:var(--danger); }
+  .reviewItem .riRow.userRight{ color:var(--good); }
+  .reviewItem .riExpl{ font-size:0.82rem; color:var(--muted); margin-top:8px; line-height:1.5; }
+
+  @media (max-width:700px){
+    .quizResultHero .qrScore{ font-size:2.2rem; }
+  }
+
+  /* ============ PHASE 5: PROGRESS & ACHIEVEMENTS ============ */
+  .progOverview{ display:flex; align-items:center; gap:26px; flex-wrap:wrap; background:var(--surface);
+    border:1px solid rgba(255,255,255,0.08); border-radius:18px; padding:22px 24px; margin:16px 0 22px; }
+  .progOverviewRing{ text-align:center; flex-shrink:0; }
+  .progOverviewLabel{ font-size:0.72rem; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; margin-top:6px; }
+  .progOverviewStats{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px 28px; flex:1; min-width:220px; }
+  .progStat b{ display:block; font-family:'Chakra Petch',sans-serif; font-size:1.3rem; color:var(--cyan); }
+  .progStat span{ font-size:0.76rem; color:var(--muted); }
+  .progLevelBox{ min-width:200px; flex-shrink:0; }
+  .progLevelTitle{ font-family:'Chakra Petch',sans-serif; font-weight:600; margin-bottom:8px; }
+  .progXpTrack{ height:8px; border-radius:4px; background:rgba(255,255,255,0.08); overflow:hidden; }
+  .progXpFill{ height:100%; background:linear-gradient(90deg, var(--cyan), #7dffce); border-radius:4px; transition:width .3s ease; }
+  .progXpLabel{ font-size:0.76rem; color:var(--muted); margin-top:6px; }
+
+  .progSection{ margin-bottom:24px; }
+  .progSection h4{ font-family:'Chakra Petch',sans-serif; font-size:1rem; margin-bottom:12px; }
+  .progEmptyState{ background:var(--surface); border:1px dashed rgba(255,255,255,0.15); border-radius:14px;
+    padding:20px; text-align:center; font-size:0.88rem; color:var(--muted); margin-bottom:14px; }
+  .progModuleList{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:14px; overflow:hidden; }
+  .progModuleRow{ display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.9rem; }
+  .progModuleRow:last-child{ border-bottom:none; }
+  .progModuleRow .pmIcon{ font-size:1.1rem; }
+  .progModuleRow .pmName{ flex:1; }
+  .progModuleRow .pmMark{ font-family:'Chakra Petch',sans-serif; font-weight:600; color:var(--muted); }
+  .progModuleRow.complete .pmMark{ color:var(--good); }
+  .progModuleRow.complete{ background:rgba(61,255,160,0.04); }
+
+  .achGrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; }
+  .achCard{ background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:16px; text-align:center; transition:all .2s; }
+  .achCard.unlocked{ border-color:rgba(0,229,255,0.35); background:rgba(0,229,255,0.05); }
+  .achCard.locked{ opacity:0.55; }
+  .achCard .achIcon{ font-size:1.8rem; margin-bottom:6px; }
+  .achCard .achTitle{ font-family:'Chakra Petch',sans-serif; font-weight:600; font-size:0.9rem; margin-bottom:4px; }
+  .achCard .achDesc{ font-size:0.76rem; color:var(--muted); line-height:1.4; margin-bottom:8px; min-height:34px; }
+  .achCard .achDate{ font-size:0.68rem; letter-spacing:0.05em; text-transform:uppercase; color:var(--cyan); }
+  .achCard.locked .achDate{ color:var(--muted); }
+
+  .recGrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }
+  .recCard{ background:rgba(0,229,255,0.05); border:1px solid var(--border); border-radius:14px; padding:16px 18px;
+    cursor:pointer; transition:all .2s ease; }
+  .recCard:hover{ background:rgba(0,229,255,0.1); transform:translateY(-2px); }
+  .recCard .recIcon{ font-size:1.3rem; margin-bottom:6px; }
+  .recCard .recText{ font-family:'Chakra Petch',sans-serif; font-weight:600; font-size:0.94rem; color:var(--cyan); margin-bottom:6px; }
+  .recCard .recReason{ font-size:0.8rem; color:var(--muted); line-height:1.5; }
+
+  /* ============ PHASE 7: RESOURCES (Glossary + References) ============ */
+  .glossaryFull{ font-size:0.74rem; color:var(--cyan); letter-spacing:0.04em; margin:-4px 0 6px; }
+  .glossaryActions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .glossaryLink{ background:rgba(0,229,255,0.1); border:1px solid var(--border); color:var(--cyan);
+    font-size:0.76rem; padding:6px 12px; border-radius:999px; cursor:pointer; }
+  .glossaryLink:hover{ background:rgba(0,229,255,0.2); }
+
+  /* ============ PHASE 7: INTERACTIVE FLIGHT VISUALIZER (Features 2 & 3) ============ */
+  .vizWidget{ display:grid; grid-template-columns:220px 1fr; gap:20px; background:var(--surface);
+    border:1px solid rgba(255,255,255,0.08); border-radius:18px; padding:20px; margin-bottom:10px; }
+  .vizStage{ height:200px; display:flex; align-items:center; justify-content:center; perspective:600px;
+    background:radial-gradient(circle, rgba(0,229,255,0.08), transparent 70%); border-radius:14px; }
+  .vizDrone{ position:relative; width:80px; height:80px; transition:transform 0.5s cubic-bezier(.3,.8,.4,1), filter 0.4s ease; }
+  .vizArm{ position:absolute; top:50%; left:50%; width:80px; height:6px; background:var(--cyan); border-radius:3px;
+    box-shadow:0 0 10px rgba(0,229,255,0.5); }
+  .vizArm.a1{ transform:translate(-50%,-50%) rotate(45deg); }
+  .vizArm.a2{ transform:translate(-50%,-50%) rotate(-45deg); }
+  .vizArm::before, .vizArm::after{ content:''; position:absolute; width:10px; height:10px; border-radius:50%;
+    background:var(--cyan); top:50%; transform:translateY(-50%); box-shadow:0 0 8px var(--cyan); }
+  .vizArm::before{ left:-3px; } .vizArm::after{ right:-3px; }
+  .vizBody{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:26px; height:26px;
+    background:var(--text); border-radius:8px; box-shadow:0 0 14px rgba(255,255,255,0.4); }
+  .vizArrow{ position:absolute; left:50%; top:50%; width:3px; height:0; background:var(--amber); transform-origin:top center;
+    transform:translateX(-50%); transition:height 0.4s ease, opacity 0.4s ease; opacity:0; border-radius:2px; }
+  .vizArrow::after{ content:''; position:absolute; bottom:-1px; left:50%; transform:translateX(-50%); width:0; height:0;
+    border-left:6px solid transparent; border-right:6px solid transparent; }
+
+  .vizDrone.effect-thrust, .vizDrone.effect-throttle{ transform:translateY(-26px); }
+  .vizDrone.effect-thrust .vizArrow, .vizDrone.effect-throttle .vizArrow{ opacity:1; height:50px; top:-50px; border-bottom:8px solid var(--amber); border-top:none; }
+  .vizDrone.effect-lift{ transform:translateY(-14px); }
+  .vizDrone.effect-lift .vizArrow{ opacity:1; height:36px; top:-36px; border-bottom:8px solid var(--good); border-top:none; }
+  .vizDrone.effect-weight{ transform:translateY(20px); }
+  .vizDrone.effect-weight .vizArrow{ opacity:1; height:36px; top:26px; border-top:8px solid var(--danger); }
+  .vizDrone.effect-drag{ transform:translateX(-18px) rotate(-8deg); }
+  .vizDrone.effect-drag .vizArrow{ opacity:1; height:40px; top:50%; left:calc(50% + 46px); transform:translate(0,-50%) rotate(90deg); border-bottom:8px solid var(--muted); border-top:none; }
+  .vizDrone.effect-pitch{ transform:rotateX(35deg); }
+  .vizDrone.effect-roll{ transform:rotateY(35deg); }
+  .vizDrone.effect-yaw{ transform:rotate(70deg); }
+
+  .vizPanel{ display:flex; flex-direction:column; }
+  .vizPills{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+  .vizPill{ background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); color:var(--muted);
+    font-size:0.78rem; padding:7px 12px; border-radius:999px; cursor:pointer; transition:all .15s; }
+  .vizPill:hover{ border-color:var(--border); color:var(--text); }
+  .vizPill.active{ background:rgba(0,229,255,0.15); border-color:var(--cyan); color:var(--cyan); font-weight:600; }
+  .vizDetail{ background:rgba(255,255,255,0.03); border-radius:12px; padding:16px 18px; flex:1; }
+  .vizDetailIcon{ font-size:1.5rem; }
+  .vizDetailName{ font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:1.05rem; margin:6px 0; }
+  .vizDetailDesc{ font-size:0.86rem; color:var(--muted); line-height:1.55; }
+
+  @media (max-width:700px){
+    .vizWidget{ grid-template-columns:1fr; }
+    .vizStage{ height:160px; }
+  }
+
+
+  .progResetRow{ text-align:center; margin-top:10px; }
+  .resetProgressBtn{ background:rgba(255,77,94,0.08); border:1px solid rgba(255,77,94,0.35); color:var(--danger);
+    padding:10px 20px; border-radius:999px; font-size:0.85rem; cursor:pointer; font-family:'Chakra Petch',sans-serif; }
+  .resetProgressBtn:hover{ background:rgba(255,77,94,0.18); }
+
+  .resetOverlay{ position:fixed; inset:0; background:rgba(3,8,14,0.7); backdrop-filter:blur(4px); z-index:500;
+    display:flex; align-items:center; justify-content:center; padding:20px; }
+  .resetDialog{ background:var(--panel-strong,#0D1C30); border:1px solid rgba(255,77,94,0.3); border-radius:18px;
+    padding:26px; max-width:420px; box-shadow:var(--shadow); }
+  .resetDialog h4{ font-family:'Chakra Petch',sans-serif; margin-bottom:10px; color:var(--danger); }
+  .resetDialog p{ font-size:0.88rem; color:var(--muted); line-height:1.55; margin-bottom:20px; }
+  .resetDialogBtns{ display:flex; gap:10px; justify-content:flex-end; }
+  .resetConfirmBtn{ background:var(--danger); border:none; color:#fff; padding:10px 20px; border-radius:999px;
+    font-family:'Chakra Petch',sans-serif; font-weight:600; cursor:pointer; }
+  .resetConfirmBtn:hover{ opacity:0.85; }
+
+  @media (max-width:700px){
+    .progOverview{ flex-direction:column; align-items:stretch; text-align:center; }
+    .progOverviewRing{ margin:0 auto; }
+    .progOverviewStats{ grid-template-columns:1fr 1fr; }
+  }
+  /* ============================================================
+     PHASE 10.0 — DRONOVA PROFESSIONAL UI/UX FOUNDATION
+     Purely additive: extends the existing design tokens and button
+     hierarchy (documented above as "Phase 6") rather than replacing
+     any of it. No existing class was renamed, removed, or had its
+     behavior changed — every rule below either adds a genuinely
+     missing state (hover/active/disabled/outline/small) to classes
+     already used throughout the app, or introduces new opt-in
+     utility classes for future use.
+  ============================================================ */
+  :root {
+    /* Motion timing — consolidates the ad-hoc 0.2s/0.25s durations
+       already used throughout into named tokens for future reuse. */
+    --transition-fast: 0.15s ease;
+    --transition-base: 0.2s ease;
+    --transition-slow: 0.4s ease;
+    /* Typography scale — h1 already uses a clamp(); this extends the
+       same responsive-scale approach down through the rest of the
+       hierarchy so new sections can reference it instead of picking
+       one-off font-sizes. */
+    --fs-h1: clamp(2.5rem, 4vw, 3.6rem); /* matches the existing h1 rule exactly */
+    --fs-h2: clamp(1.6rem, 2.6vw, 2.1rem);
+    --fs-h3: clamp(1.15rem, 1.8vw, 1.35rem);
+    --fs-body: 1rem;
+    --fs-small: 0.88rem;
+    --fs-caption: 0.76rem;
+  }
+
+  /* Genuinely missing hover feedback on the primary page-navigation
+     tabs — they previously had only a base state and an .active
+     state, with nothing communicating "this is clickable" on hover. */
+  .page-tab:hover:not(.active) {
+    color: var(--text);
+    border-color: rgba(0,229,255,0.3);
+    background: rgba(255,255,255,0.06);
+  }
+
+  /* Shared :active (press) feedback and :disabled treatment across
+     every existing button-like class, added once here rather than
+     duplicated per class. Selector list covers every button class
+     already in use across the app. */
+  .page-action-btn:active, .action-btn:active, .primary-btn:active,
+  .btn-primary:active, .btn-tertiary:active, .page-tab:active {
+    transform: translateY(0) scale(0.98);
+    transition: transform 0.08s ease;
+  }
+  .page-action-btn:disabled, .action-btn:disabled, .primary-btn:disabled,
+  .btn-primary:disabled, .btn-tertiary:disabled, .page-tab:disabled,
+  .page-action-btn[aria-disabled="true"], .btn-primary[aria-disabled="true"] {
+    opacity: 0.42;
+    cursor: not-allowed;
+    transform: none !important;
+    pointer-events: none;
+  }
+
+  /* New opt-in button modifiers (Part 5: outline + small size), layered
+     on top of .page-action-btn exactly like .btn-primary/.btn-tertiary
+     already are — e.g. class="page-action-btn btn-outline btn-sm". */
+  .btn-outline {
+    background: transparent;
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+  .btn-outline:hover { background: rgba(0,229,255,0.08); }
+
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: var(--fs-caption);
+  }
+
+  /* Narrow-phone refinement (Part 15) — the existing 720px breakpoint
+     already prevents overflow via flex-wrap throughout; this tightens
+     spacing further for genuinely small devices (~390-430px) rather
+     than fixing a broken layout. */
+  @media (max-width: 480px) {
+    .app-shell { padding: 14px 12px 20px; }
+    .page-tab { padding: 8px 12px; font-size: 0.85rem; }
+    .action-btn, .page-action-btn { padding: 8px 13px; font-size: 0.85rem; }
+    .modal-card { padding: 20px; }
+    /* Phase 10.6, Part 8: the header dropdown triggers (Learn/Explore/Fly/
+       Assess/My Learning/Challenge/About) were the one confirmed touch-
+       target gap found during this phase's audit — their padding wasn't
+       covered by the rule above (different class), leaving them under the
+       ~44px comfortable-tap-target guideline on a phone. */
+    .dr-navgroup-btn { padding: 12px 12px; min-height: 44px; display: inline-flex; align-items: center; }
+    .dr-navdrop .page-tab { padding: 11px 12px; min-height: 40px; }
+  }
+
+  /* ============================================================
+     PHASE 10.1 — HOMEPAGE SECTIONS
+     Built from the existing design system (var(--space-*), .card,
+     .eyebrow, .page-action-btn) rather than a separate visual
+     language. Each section reuses .types-panel's spacing rhythm
+     where it fits, with its own class only where the layout
+     genuinely differs (grids, the journey steps, the promo split).
+  ============================================================ */
+  .dr-about, .dr-journey, .dr-features, .dr-why {
+    margin-top: var(--space-5);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    background: rgba(10, 21, 38, 0.6);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .dr-about h2, .dr-journey h2, .dr-features h2, .dr-why h2 {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: var(--fs-h2);
+    margin-bottom: 10px;
+  }
+  .dr-lede { color: var(--muted); line-height: 1.7; max-width: 680px; }
+
+  .dr-journey-grid, .dr-features-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+  }
+  .dr-journey-step {
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    transition: border-color var(--transition-base), transform var(--transition-base);
+  }
+  .dr-journey-step:hover { border-color: rgba(0,229,255,0.3); transform: translateY(-2px); }
+  .dr-journey-num {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--cyan);
+    opacity: 0.55;
+    margin-bottom: 6px;
+  }
+  .dr-journey-step h3 { font-family: 'Chakra Petch', sans-serif; margin-bottom: 6px; }
+  .dr-journey-step p { color: var(--muted); font-size: var(--fs-small); line-height: 1.5; }
+
+  .dr-feature-card { min-height: auto; }
+  .dr-feature-card .inner { padding: var(--space-3); }
+  .dr-feature-card h2 { font-size: 1.05rem; margin-bottom: 6px; }
+  .dr-feature-card p { font-size: var(--fs-small); }
+
+  .dr-promo {
+    margin-top: var(--space-4);
+    padding: var(--space-5) var(--space-4);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, rgba(0,229,255,0.05), transparent 60%);
+    border: 1px solid rgba(0,229,255,0.14);
+  }
+  .dr-promo-alt { background: linear-gradient(135deg, rgba(61,255,160,0.05), transparent 60%); border-color: rgba(61,255,160,0.14); }
+  .dr-promo-copy { max-width: 640px; }
+  .dr-promo-copy h2 { font-family: 'Chakra Petch', sans-serif; font-size: var(--fs-h2); margin-bottom: 10px; }
+  .dr-promo-copy p { color: var(--muted); line-height: 1.7; margin-bottom: var(--space-3); }
+
+  .dr-checklist { list-style: none; margin-top: var(--space-3); display: grid; gap: 8px; }
+  .dr-checklist li { color: var(--text); padding-left: 26px; position: relative; }
+  .dr-checklist li::before { content: '✓'; position: absolute; left: 0; color: var(--good); font-weight: 700; }
+
+  .dr-final-cta {
+    margin-top: var(--space-5);
+    padding: var(--space-5) var(--space-4);
+    border-radius: var(--radius-lg);
+    text-align: center;
+    background: rgba(10, 21, 38, 0.85);
+    border: 1px solid rgba(0,229,255,0.18);
+  }
+  .dr-final-cta h2 { font-family: 'Chakra Petch', sans-serif; font-size: var(--fs-h2); margin-bottom: 8px; }
+  .dr-final-cta p { color: var(--muted); margin-bottom: var(--space-3); }
+
+  .dr-footer {
+    margin-top: var(--space-5);
+    padding: var(--space-4) var(--space-3);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+
+  @media (max-width: 1080px) {
+    .dr-journey-grid, .dr-features-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .dr-journey-grid, .dr-features-grid { grid-template-columns: repeat(2, 1fr); }
+    .dr-final-cta .hero-actions { flex-direction: column; }
+    .dr-footer { flex-direction: column; align-items: flex-start; }
+  }
+  @media (max-width: 480px) {
+    .dr-journey-grid, .dr-features-grid { grid-template-columns: 1fr; }
+    .dr-about, .dr-journey, .dr-features, .dr-why, .dr-promo, .dr-final-cta { padding: var(--space-3); }
+  }
+
+  /* ============================================================
+     PHASE 10.5 — STUDENT DASHBOARD
+     Reuses existing tokens/card language exclusively (--space-*,
+     --radius-*, --shadow-*, .page-action-btn) — no new colors, no
+     new visual language. All values rendered here come from the
+     existing window.DronovaProgress API (Part 1 requirement).
+  ============================================================ */
+  .dr-dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-top: var(--space-3); }
+  .dr-dash-wide { grid-column: span 3; }
+  .dr-dash-card {
+    background: var(--surface); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-md);
+    padding: var(--space-3); transition: border-color var(--transition-base), transform var(--transition-base);
+  }
+  .dr-dash-card:hover { border-color: rgba(0,229,255,0.25); }
+  .dr-dash-label { font-size: var(--fs-caption); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .dr-dash-bignum { font-family: 'Chakra Petch', sans-serif; font-size: 2.4rem; font-weight: 700; color: var(--cyan); line-height: 1; }
+  .dr-dash-bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); margin: 10px 0 6px; overflow: hidden; }
+  .dr-dash-barfill { height: 100%; background: linear-gradient(90deg, var(--cyan), #7dffce); border-radius: 4px; transition: width 0.5s ease; }
+  .dr-dash-sub { color: var(--muted); font-size: var(--fs-small); }
+  .dr-dash-title { font-family: 'Chakra Petch', sans-serif; font-size: 1.15rem; margin-bottom: 10px; }
+
+  .dr-dash-journey { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+  .dr-dash-stage { flex: 1 1 160px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: var(--radius-md); padding: 10px 12px; }
+  .dr-dash-stage-title { font-size: var(--fs-caption); letter-spacing: 0.08em; text-transform: uppercase; color: var(--cyan); margin-bottom: 6px; }
+  .dr-dash-stage-item { font-size: var(--fs-small); color: var(--muted); padding: 2px 0; }
+  .dr-dash-stage-item.done { color: var(--good); }
+  .dr-dash-stage-item.current { color: var(--cyan); font-weight: 600; }
+
+  .dr-dash-modules { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: var(--space-2); }
+  .dr-dash-module { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 8px 10px; }
+  .dr-dash-module-bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
+  .dr-dash-module-barfill { height: 100%; background: var(--cyan); border-radius: 3px; transition: width 0.5s ease; }
+  .dr-dash-module-pct { font-size: var(--fs-caption); color: var(--muted); min-width: 32px; text-align: right; }
+
+  .dr-dash-empty { color: var(--muted); font-size: var(--fs-small); line-height: 1.6; }
+  .dr-dash-stat-row { display: flex; justify-content: space-between; font-size: var(--fs-small); padding: 3px 0; color: var(--text); }
+  .dr-dash-stat-row span:last-child { color: var(--muted); }
+  .dr-dash-cta-row { margin-top: 8px; }
+
+  .dr-dash-milestones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--space-2); }
+  .dr-dash-milestone { display: flex; align-items: center; gap: 6px; font-size: var(--fs-small); padding: 6px 12px; border-radius: var(--radius-pill); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); color: var(--muted); }
+  .dr-dash-milestone.unlocked { color: var(--good); border-color: rgba(61,255,160,0.25); background: rgba(61,255,160,0.06); }
+
+  @media (max-width: 1080px) {
+    .dr-dash-grid { grid-template-columns: repeat(2, 1fr); }
+    .dr-dash-wide { grid-column: span 2; }
+  }
+  @media (max-width: 720px) {
+    .dr-dash-grid { grid-template-columns: 1fr; }
+    .dr-dash-wide { grid-column: span 1; }
+    .dr-dash-modules { grid-template-columns: 1fr; }
+  }
+
+  /* ============================================================
+     PHASE 10.4 — SCROLL REVEAL (Part 6)
+     Applied only to major homepage sections and journey/feature
+     cards (not every element — Part 6 explicitly warns against
+     that). Subtle: a small upward fade, ~0.4s. Disabled entirely
+     under reduced-motion, and the JS below marks everything
+     revealed immediately in that case rather than leaving content
+     invisible for motion-sensitive users.
+  ============================================================ */
+  .dr-reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity var(--transition-slow), transform var(--transition-slow);
+  }
+  .dr-reveal.dr-revealed { opacity: 1; transform: translateY(0); }
+  @media (prefers-reduced-motion: reduce) {
+    .dr-reveal, .dr-reveal.dr-revealed { opacity: 1; transform: none; transition: none; }
+    .dr-journey-step:hover, .card:hover, .types-card:hover { transform: none; }
+    * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  }
+
+  /* ============================================================
+     PHASE 10.2 — HEADER CATEGORY NAVIGATION (LEARN/EXPLORE/FLY/
+     CHALLENGE/ASSESS). Click-to-toggle (not hover-only, per
+     accessibility requirement) — one small script block handles
+     open/close/outside-click/Escape. The actual links inside each
+     dropdown are plain .page-tab buttons, so they're auto-wired by
+     the EXISTING dronova_scene.js click handling with zero changes
+     to that file — this only adds the show/hide toggle behavior
+     for the dropdown panel itself.
+  ============================================================ */
+  .dr-navgroup { position: relative; }
+  .dr-navgroup-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 0.92rem;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color var(--transition-base), background var(--transition-base);
+  }
+  .dr-navgroup-btn:hover, .dr-navgroup[data-open="true"] .dr-navgroup-btn { color: var(--text); background: rgba(0,229,255,0.1); }
+  .dr-navgroup-single.active, .dr-navgroup-single.page-tab.active { color: var(--cyan); background: rgba(0,229,255,0.12); }
+  .dr-navdrop {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 200px;
+    padding: 6px;
+    border-radius: var(--radius-md);
+    background: rgba(8, 18, 34, 0.98);
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: var(--shadow);
+    z-index: 40;
+    flex-direction: column;
+    gap: 2px;
+    /* Phase 10.4: animated open/close via opacity+transform instead of an
+       instant display toggle — display:none can't be transitioned, so
+       visibility+opacity+a tiny translateY give a smooth, fast reveal
+       without moving anything else on the page. */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: opacity var(--transition-base), transform var(--transition-base), visibility var(--transition-base);
+  }
+  .dr-navgroup[data-open="true"] .dr-navdrop {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .dr-navdrop .page-tab {
+    text-align: left;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    padding: 9px 10px;
+    width: 100%;
+  }
+  .dr-navdrop .page-tab:hover { background: rgba(0,229,255,0.1); }
+  .dr-navdrop .page-tab.active { color: var(--cyan); background: rgba(0,229,255,0.1); }
+
+  @media (max-width: 720px) {
+    .nav { width: 100%; }
+    .dr-navdrop {
+      position: static; box-shadow: none; border: none; background: rgba(255,255,255,0.03); margin-top: 0;
+      /* static positioning can't rely on opacity alone to "disappear" —
+         collapse the layout space too, so a closed dropdown doesn't leave
+         a gap in the mobile nav. */
+      max-height: 0; overflow: hidden; padding: 0; transform: none;
+      transition: max-height var(--transition-base), opacity var(--transition-base), padding var(--transition-base);
+    }
+    .dr-navgroup[data-open="true"] .dr-navdrop { max-height: 260px; padding: 6px; margin-top: 4px; }
+  }
+
+  /* Footer columns (Part 16) */
+  .dr-footer-cols { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .dr-footer-col { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .dr-footer-heading { font-size: var(--fs-caption); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .dr-footer-col .page-tab { text-align: left; border: none; background: transparent; padding: 3px 0; font-size: var(--fs-small); color: var(--muted); border-radius: 0; }
+  .dr-footer-col .page-tab:hover, .dr-footer-col .page-tab.active { color: var(--cyan); background: transparent; }
+
+  /* Contextual CTA (Part 14) — one consistent pattern reused at each
+     learning->action connection point. */
+  .dr-contextual-cta {
+    margin: var(--space-3) 0;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: rgba(0,229,255,0.05);
+    border: 1px solid rgba(0,229,255,0.15);
+  }
+  .dr-contextual-cta p { color: var(--muted); margin: 4px 0 10px; }
+
+  /* Learning Path component (Part 9) — compact, horizontal, current
+     step highlighted. Populated from window.DronovaProgress.getSnapshot()
+     (existing, read-only API — no progress logic touched). */
+  .dr-learnpath {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 var(--space-3);
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+  }
+  .dr-learnpath-item { font-size: var(--fs-small); color: var(--muted); display: flex; align-items: center; gap: 4px; }
+  .dr-learnpath-item.done { color: var(--good); }
+  .dr-learnpath-item.current { color: var(--cyan); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <img src="https://www.jotform.com/uploads/veencantwin23/form_files/WhatsApp%20Image%202026-07-23%20at%2017.27.30.6a61e26dc6a1e8.76356414.jpeg" alt="DRONOVA logo" />
+        <div>
+          <div class="brand-title">DRON<span>OVA</span></div>
+          <div class="brand-sub">interactive drone learning</div>
+        </div>
+      </div>
+      <div class="searchWrap">
+        <input type="text" id="globalSearch" placeholder="Search components, lessons, terms…" autocomplete="off" />
+        <div id="searchResults" class="searchResults"></div>
+      </div>
+      <nav class="nav">
+        <div class="dr-navgroup" data-navgroup>
+          <button class="dr-navgroup-btn" type="button" aria-haspopup="true" aria-expanded="false">Learn ▾</button>
+          <div class="dr-navdrop" role="menu">
+            <button class="page-tab" role="menuitem" data-page="intro">Introduction</button>
+            <button class="page-tab" role="menuitem" data-page="types">Drone Types</button>
+            <button class="page-tab" role="menuitem" data-page="anatomy">Components</button>
+            <button class="page-tab" role="menuitem" data-page="architecture">Architecture</button>
+            <button class="page-tab" role="menuitem" data-page="mechanics">Flight Fundamentals</button>
+            <button class="page-tab" role="menuitem" data-page="applications">Applications</button>
+          </div>
+        </div>
+        <div class="dr-navgroup" data-navgroup>
+          <button class="dr-navgroup-btn" type="button" aria-haspopup="true" aria-expanded="false">Explore ▾</button>
+          <div class="dr-navdrop" role="menu">
+            <button class="page-tab" role="menuitem" data-page="explorer">3D Drone Lab</button>
+            <button class="page-tab" role="menuitem" data-page="anatomy">Interactive Components</button>
+          </div>
+        </div>
+        <div class="dr-navgroup" data-navgroup>
+          <button class="dr-navgroup-btn" type="button" aria-haspopup="true" aria-expanded="false">Fly ▾</button>
+          <div class="dr-navdrop" role="menu">
+            <button class="page-tab" role="menuitem" data-page="simulator">Flight Simulator</button>
+          </div>
+        </div>
+        <button class="dr-navgroup-btn dr-navgroup-single page-tab" data-page="simulator">Challenge</button>
+        <div class="dr-navgroup" data-navgroup>
+          <button class="dr-navgroup-btn" type="button" aria-haspopup="true" aria-expanded="false">Assess ▾</button>
+          <div class="dr-navdrop" role="menu">
+            <button class="page-tab" role="menuitem" data-page="quiz">Quiz</button>
+            <button class="page-tab" role="menuitem" data-page="progress">Progress</button>
+            <button class="page-tab" role="menuitem" data-page="resources">Resources</button>
+          </div>
+        </div>
+        <button class="dr-navgroup-btn dr-navgroup-single page-tab" data-page="dashboard">My Learning</button>
+        <button class="dr-navgroup-btn dr-navgroup-single page-tab" data-page="about">About</button>
+        <button class="action-btn" id="loginBtn">Login</button>
+        <button class="action-btn" id="signupBtn">Sign Up</button>
+      </nav>
+    </header>
+
+    <main class="hero">
+      <section class="hero-copy">
+        <div class="eyebrow">Interactive Drone Learning Platform</div>
+        <h1>Learn. Explore. Fly. Master.</h1>
+        <p>Explore drone technology through interactive learning, 3D visualization and flight simulation — including a full Search &amp; Rescue training mission.</p>
+        <div class="hero-actions">
+          <button class="page-action-btn btn-primary" data-page-target="intro">Start Learning →</button>
+          <button class="page-action-btn btn-outline" data-page-target="simulator">Launch Simulator</button>
+        </div>
+        <div class="page-icons" id="pageNav">
+          <button class="page-tab active" data-page="home"><span class="tab-icon">🏠</span>Dashboard</button>
+          <button class="page-tab" data-page="intro"><span class="tab-icon">🚀</span>Introduction</button>
+          <button class="page-tab" data-page="types"><span class="tab-icon">🧭</span>Types</button>
+          <button class="page-tab" data-page="explorer"><span class="tab-icon">🧊</span>3D Lab</button>
+          <button class="page-tab" data-page="anatomy"><span class="tab-icon">🛠️</span>Components</button>
+          <button class="page-tab" data-page="architecture"><span class="tab-icon">🧩</span>Architecture</button>
+          <button class="page-tab" data-page="mechanics"><span class="tab-icon">✈️</span>Flight</button>
+          <button class="page-tab" data-page="applications"><span class="tab-icon">🌍</span>Applications</button>
+          <button class="page-tab" data-page="simulator"><span class="tab-icon">🕹️</span>Simulator</button>
+          <button class="page-tab" data-page="progress"><span class="tab-icon">📈</span>Progress</button>
+          <button class="page-tab" data-page="dashboard"><span class="tab-icon">🎓</span>My Learning</button>
+          <button class="page-tab" data-page="resources"><span class="tab-icon">📚</span>Resources</button>
+          <button class="page-tab" data-page="quiz"><span class="tab-icon">❓</span>Quiz</button>
+          <button class="page-tab" data-page="about"><span class="tab-icon">ℹ️</span>About</button>
+        </div>
+
+      </section>
+
+      <section class="hero-stage">
+        <div class="stage-hud">
+          <div class="pill"><strong>3D</strong> model</div>
+          <div class="pill"><strong>Animated</strong> propellers</div>
+          <!-- Relocated from the hero headline area (Phase 10.1): these are
+               3D-viewer controls, not homepage navigation, so they belong
+               next to the viewer they control. Same IDs, same behavior —
+               dronova_scene.js finds them by getElementById regardless of
+               where they sit in the DOM, so nothing else needed to change. -->
+          <button class="primary-btn" id="toggleExploded" style="padding:8px 14px; font-size:0.82rem; border-radius:999px;">Toggle Exploded View</button>
+          <button class="secondary-btn" id="resetView" style="padding:8px 14px; font-size:0.82rem; border-radius:999px;">Reset View</button>
+        </div>
+        <div id="view">
+          <iframe
+            id="droneViewerFrame"
+            title="3D Exploded Drone Model"
+            frameborder="0"
+            allow="fullscreen"
+            allowfullscreen
+            loading="lazy"
+            src="./drone-viewer/drone_exploded_view.html"
+            onerror="window.dronovaShowViewerError && window.dronovaShowViewerError()"
+          ></iframe>
+          <div id="viewerErrorState" class="viewerErrorState" style="display:none;" role="alert">
+            <div class="viewerErrorIcon">⚠️</div>
+            <div class="viewerErrorTitle">Unable to load the 3D model.</div>
+            <div class="viewerErrorSub">This can happen if the page is opened outside its project folder, or if 3D graphics are unavailable in this browser.</div>
+            <button class="page-action-btn btn-primary" id="viewerRetryBtn">↻ Retry</button>
+          </div>
+        </div>
+        <details class="viewer-hint">
+          <summary>Viewer Tips</summary>
+          <div class="viewer-hint-content">
+            <strong>Tip:</strong> Open the viewer controls when you need Explode, Zoom, paint or reset tools. Component labels and the component index are hidden by default for a cleaner model view and can be enabled from the viewer buttons.
+          </div>
+        </details>
+      </section>
+    </main>
+
+    <section class="page-panel active" data-page-panel="home">
+      <section class="dr-about dr-reveal">
+        <div class="eyebrow">About DRONOVA</div>
+        <h2>Explore Drone Technology Through Interaction</h2>
+        <p class="dr-lede">DRONOVA combines structured learning, interactive 3D visualization and flight simulation to help students understand drone technology through practical digital experiences.</p>
+      </section>
+
+      <section class="dr-journey dr-reveal">
+        <div class="eyebrow">The DRONOVA Experience</div>
+        <h2>A Learning Pathway, Not Just a Feature List</h2>
+        <div class="dr-journey-grid">
+          <article class="dr-journey-step">
+            <div class="dr-journey-num">01</div>
+            <h3>Learn</h3>
+            <p>Understand drone technology and fundamentals.</p>
+          </article>
+          <article class="dr-journey-step">
+            <div class="dr-journey-num">02</div>
+            <h3>Explore</h3>
+            <p>Interact with drone components and 3D models.</p>
+          </article>
+          <article class="dr-journey-step">
+            <div class="dr-journey-num">03</div>
+            <h3>Fly</h3>
+            <p>Practise drone control in the simulator.</p>
+          </article>
+          <article class="dr-journey-step">
+            <div class="dr-journey-num">04</div>
+            <h3>Challenge</h3>
+            <p>Complete Search &amp; Rescue and future training missions.</p>
+          </article>
+          <article class="dr-journey-step">
+            <div class="dr-journey-num">05</div>
+            <h3>Assess</h3>
+            <p>Test knowledge and monitor learning progress.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="dr-features dr-reveal">
+        <div class="eyebrow">Feature Highlights</div>
+        <h2>Everything You Need, In One Platform</h2>
+        <div class="dr-features-grid">
+          <article class="card dr-feature-card">
+            <div class="inner"><h2>Interactive Learning</h2><p>Structured educational content.</p></div>
+          </article>
+          <article class="card dr-feature-card">
+            <div class="inner"><h2>3D Drone Lab</h2><p>Explore drone components through interactive 3D visualization.</p></div>
+          </article>
+          <article class="card dr-feature-card">
+            <div class="inner"><h2>Flight Simulator</h2><p>Practise drone control in an interactive environment.</p></div>
+          </article>
+          <article class="card dr-feature-card">
+            <div class="inner"><h2>Search &amp; Rescue</h2><p>Apply flight skills in a practical mission.</p></div>
+          </article>
+          <article class="card dr-feature-card">
+            <div class="inner"><h2>Quiz &amp; Progress</h2><p>Test knowledge and monitor learning.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="dr-promo dr-reveal">
+        <div class="dr-promo-copy">
+          <div class="eyebrow">Interactive 3D Lab</div>
+          <h2>Explore the Drone from Every Angle</h2>
+          <p>Interact with drone components and discover how each part contributes to the complete system.</p>
+          <button class="page-action-btn btn-primary" data-page-target="explorer">Explore 3D Lab →</button>
+        </div>
+      </section>
+
+      <section class="dr-promo dr-promo-alt dr-reveal">
+        <div class="dr-promo-copy">
+          <div class="eyebrow">Flight Simulator</div>
+          <h2>Take Control.</h2>
+          <p>Practise drone flight in a dynamic environment with realistic controls, camera modes and training scenarios.</p>
+          <button class="page-action-btn btn-primary" data-page-target="simulator">Enter Flight Simulator →</button>
+        </div>
+      </section>
+
+      <section class="dr-promo dr-reveal">
+        <div class="dr-promo-copy">
+          <div class="eyebrow">Search &amp; Rescue</div>
+          <h2>Put Your Skills to the Test</h2>
+          <p>Search for a missing person, identify the target, record its location, return to base and complete a controlled landing.</p>
+          <button class="page-action-btn btn-primary" data-page-target="simulator">Explore Mission →</button>
+        </div>
+      </section>
+
+      <section class="dr-why dr-reveal">
+        <div class="eyebrow">Why DRONOVA?</div>
+        <h2>Learn Through Interaction.</h2>
+        <p class="dr-lede">DRONOVA transforms traditional drone learning into an interactive digital experience that combines:</p>
+        <ul class="dr-checklist">
+          <li>Visual learning</li>
+          <li>Interactive 3D models</li>
+          <li>Practical flight simulation</li>
+          <li>Scenario-based training</li>
+          <li>Knowledge assessment</li>
+        </ul>
+      </section>
+
+      <section class="dr-final-cta dr-reveal">
+        <h2>Ready to Explore Drone Technology?</h2>
+        <p>Start learning, explore the 3D Lab, or take control of the simulator.</p>
+        <div class="hero-actions" style="justify-content:center;">
+          <button class="page-action-btn btn-primary" data-page-target="intro">Start Learning</button>
+          <button class="page-action-btn btn-outline" data-page-target="simulator">Fly Now</button>
+        </div>
+      </section>
+
+      <div class="types-panel">
+        <div class="types-header">
+          <h3>DRONOVA LEARNING DASHBOARD</h3>
+          <p>Your path through Dronova: Learn the theory, explore the components, understand the systems, then try the simulator.</p>
+        </div>
+        <div id="recommendSlot"></div>
+        <div id="dashboardGrid" class="dashGrid"></div>
+        <button class="page-action-btn btn-primary" data-page-target="intro">Start Learning →</button>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="intro">
+      <div class="types-panel">
+        <div class="types-header"><h3 id="introHeaderTitle">INTRODUCTION</h3><p id="introHeaderSub"></p></div>
+        <div class="dr-learnpath" id="learnPathTop" data-learnpath></div>
+        <div id="introContent"></div>
+        <button class="markCompleteBtn" data-module="intro">Mark Module Complete ✓</button>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="home">← Back to Dashboard</button><button class="page-action-btn" data-page-target="types">Next: Drone Types →</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="explorer">
+      <h3>3D Explorer</h3>
+      <p>Inspect the complete DRONOVA drone in a dedicated full-screen workspace. Rotate around the model, explode or assemble the parts, zoom in for inspection, search all 77 components, isolate individual systems, and change the model finish.</p>
+      <div class="dr-contextual-cta">
+        <div class="eyebrow">Immersive 3D Exploration</div>
+        <p>For the cleanest view, launch the drone explorer in full screen. The complete model will automatically re-fit to the available screen space.</p>
+        <button class="page-action-btn btn-primary" type="button" data-viewer-fullscreen>⛶ Open Fullscreen 3D Explorer</button>
+      </div>
+      <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="home">← Back to Dashboard</button></div>
+    </section>
+
+    <section class="page-panel" data-page-panel="types">
+      <div class="types-panel">
+        <div class="types-header"><h3 id="typesHeaderTitle">TYPES OF DRONES</h3><p id="typesHeaderSub"></p></div>
+        <div id="typesContent"></div>
+        <button class="markCompleteBtn" data-module="types">Mark Module Complete ✓</button>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="intro">← Back</button><button class="page-action-btn" data-page-target="anatomy">Next: Components →</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="anatomy">
+      <div class="types-panel">
+        <div class="types-header">
+          <h3>DRONE COMPONENTS</h3>
+          <p>Every component below is a real part of the 3D model. Click one to learn about it, then use <strong>Explore in 3D</strong> to see and isolate it on the model above.</p>
+        </div>
+        <div id="componentsContent"></div>
+        <button class="markCompleteBtn" data-module="anatomy">Mark Module Complete ✓</button>
+        <div class="dr-contextual-cta">
+          <div class="eyebrow">Explore It in 3D</div>
+          <p>See how each component fits into the complete drone.</p>
+          <button class="page-action-btn btn-primary" data-page-target="explorer">Open 3D Lab →</button>
+        </div>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="types">← Back</button><button class="page-action-btn" data-page-target="architecture">Next: Architecture →</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="architecture">
+      <div class="types-panel">
+        <div class="types-header"><h3 id="archHeaderTitle">SYSTEM ARCHITECTURE</h3><p id="archHeaderSub"></p></div>
+        <div id="architectureContent"></div>
+        <button class="markCompleteBtn" data-module="architecture">Mark Module Complete ✓</button>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="anatomy">← Back</button><button class="page-action-btn" data-page-target="mechanics">Next: How It Flies →</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="mechanics">
+      <div class="types-panel">
+        <div class="types-header"><h3 id="mechHeaderTitle">HOW A DRONE FLIES</h3><p id="mechHeaderSub"></p></div>
+        <div id="mechanicsContent"></div>
+        <button class="markCompleteBtn" data-module="mechanics">Mark Module Complete ✓</button>
+        <div class="dr-contextual-cta">
+          <div class="eyebrow">Ready to Apply What You Learned?</div>
+          <p>Take control of the drone in the simulator.</p>
+          <button class="page-action-btn btn-primary" data-page-target="simulator">Enter Flight Simulator →</button>
+        </div>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="architecture">← Back</button><button class="page-action-btn" data-page-target="applications">Next: Applications →</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="applications">
+      <div class="types-panel">
+        <div class="types-header"><h3 id="appsHeaderTitle">DRONE APPLICATIONS</h3><p id="appsHeaderSub"></p></div>
+        <div id="applicationsContent"></div>
+        <button class="markCompleteBtn" data-module="applications">Mark Module Complete ✓</button>
+        <div class="dr-learnpath" id="learnPathBottom" data-learnpath></div>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="mechanics">← Back</button><button class="page-action-btn" data-page-target="simulator">Try the Simulator →</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="simulator">
+      <div class="types-panel">
+        <div class="types-header">
+          <h3>🕹️ DRONE SIMULATOR</h3>
+          <p>Put what you've learned into practice. Fly the same Dronova drone in a simple 3D environment, guided by Learning Mode, or take on Free Flight and the Flight Challenges.</p>
+        </div>
+        <div class="cardGrid">
+          <div class="infoCardSm"><div class="icTop"><span class="icIcon">🚀</span><span class="icTitle">Learning Mode</span></div><p>A guided walkthrough of Throttle, Pitch, Roll, Yaw, and Hover — one control at a time.</p></div>
+          <div class="infoCardSm"><div class="icTop"><span class="icIcon">🕊️</span><span class="icTitle">Free Flight</span></div><p>Fly freely with the full HUD, Take Off / Land / Auto Hover, and Flight Assistance toggle.</p></div>
+          <div class="infoCardSm"><div class="icTop"><span class="icIcon">🏁</span><span class="icTitle">Flight Challenges</span></div><p>Five short objectives — take off, hover, move to a target, land, and a full combined flight sequence.</p></div>
+          <div class="infoCardSm"><div class="icTop"><span class="icIcon">🚨</span><span class="icTitle">Search &amp; Rescue</span></div><p>Ready for a challenge? Search for a missing person, identify the target, record its location, return to base and land — all from the Rescue Academy inside the simulator.</p></div>
+        </div>
+        <a class="page-action-btn btn-primary" href="./simulator/simulator.html" style="display:inline-block; text-decoration:none; text-align:center;">🕹️ Launch Simulator</a>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="mechanics">← Back to Flight Principles</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="dashboard">
+      <div class="types-panel">
+        <div class="types-header">
+          <h3>🎓 DRONOVA STUDENT DASHBOARD</h3>
+          <p id="dashWelcome">Welcome back, Learner. You're making progress through the DRONOVA learning path.</p>
+        </div>
+
+        <div class="dr-dash-grid">
+          <div class="dr-dash-card dr-dash-wide" id="dashOverallCard">
+            <div class="dr-dash-label">Overall Learning Progress</div>
+            <div class="dr-dash-bignum" id="dashOverallPct">0%</div>
+            <div class="dr-dash-bar"><div class="dr-dash-barfill" id="dashOverallBar" style="width:0%"></div></div>
+            <div class="dr-dash-sub" id="dashOverallSub">0 / 0 learning topics completed</div>
+          </div>
+
+          <div class="dr-dash-card dr-dash-wide" id="dashContinueCard">
+            <div class="dr-dash-label">Continue Learning</div>
+            <div class="dr-dash-title" id="dashContinueTitle">—</div>
+            <button class="page-action-btn btn-primary" id="dashContinueBtn">Continue →</button>
+          </div>
+        </div>
+
+        <div class="dr-dash-label" style="margin-top:var(--space-4);">Your Learning Journey</div>
+        <div class="dr-dash-journey" id="dashJourney"></div>
+
+        <div class="dr-dash-label" style="margin-top:var(--space-4);">Learning Module Progress</div>
+        <div class="dr-dash-modules" id="dashModules"></div>
+
+        <div class="dr-dash-grid" style="margin-top:var(--space-4);">
+          <div class="dr-dash-card" id="dashQuizCard">
+            <div class="dr-dash-label">Quiz Performance</div>
+            <div id="dashQuizBody"></div>
+            <button class="page-action-btn btn-tertiary btn-sm" data-page-target="quiz">Take Quiz →</button>
+          </div>
+          <div class="dr-dash-card" id="dashFlightCard">
+            <div class="dr-dash-label">Flight Training</div>
+            <div id="dashFlightBody"></div>
+            <div class="dr-dash-cta-row">
+              <button class="page-action-btn btn-tertiary btn-sm" data-page-target="simulator">Simulator →</button>
+            </div>
+          </div>
+          <div class="dr-dash-card" id="dashRescueCard">
+            <div class="dr-dash-label">Search &amp; Rescue</div>
+            <div id="dashRescueBody"></div>
+            <button class="page-action-btn btn-tertiary btn-sm" data-page-target="simulator">Open Rescue Academy →</button>
+          </div>
+        </div>
+
+        <div class="dr-dash-label" style="margin-top:var(--space-4);">Milestones</div>
+        <div class="dr-dash-milestones" id="dashMilestones"></div>
+
+        <div class="dr-dash-card dr-dash-wide" id="dashNextStepCard" style="margin-top:var(--space-4);">
+          <div class="dr-dash-label">Your Next Step</div>
+          <div id="dashNextStepBody"></div>
+        </div>
+
+        <div class="dr-dash-label" style="margin-top:var(--space-4);">Quick Access</div>
+        <div class="page-links">
+          <button class="page-action-btn" data-page-target="explorer">🧊 3D Lab</button>
+          <button class="page-action-btn" data-page-target="simulator">🕹️ Simulator</button>
+          <button class="page-action-btn" data-page-target="quiz">❓ Quiz</button>
+          <button class="page-action-btn" data-page-target="resources">📚 Resources</button>
+          <button class="page-action-btn btn-tertiary" data-page-target="progress">📈 Detailed Progress</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="progress">
+      <div class="types-panel">
+        <div class="types-header">
+          <h3>PROGRESS TRACKER</h3>
+          <p>Your completion status across every Dronova learning module.</p>
+        </div>
+        <div id="progressContent" class="progressList"></div>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="home">← Back to Dashboard</button><button class="page-action-btn" data-page-target="quiz">Take a Quiz →</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="quiz">
+      <div class="types-panel">
+        <div class="types-header">
+          <h3>🧪 DRONOVA QUIZ</h3>
+          <p>Test what you've learned. Pick a category below — questions are randomly selected from each category's question bank, and some Components questions use the live 3D model.</p>
+        </div>
+        <div id="quizRoot"></div>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="home">← Back to Dashboard</button><button class="page-action-btn" data-page-target="progress">View Progress →</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="resources">
+      <div class="types-panel">
+        <div class="types-header">
+          <h3>📚 RESOURCES</h3>
+          <p>A searchable drone &amp; aviation glossary, plus the learning resources behind Dronova.</p>
+        </div>
+        <div class="searchWrap" style="max-width:100%; margin:0 0 18px;">
+          <input type="text" id="glossarySearch" placeholder="Filter glossary terms…" autocomplete="off" />
+        </div>
+        <div id="glossaryContent"></div>
+        <div class="progSection" style="margin-top:26px;">
+          <h4>📖 Learning Resources &amp; Technology</h4>
+          <div id="referencesContent"></div>
+        </div>
+        <div class="page-links"><button class="page-action-btn btn-tertiary" data-page-target="home">← Back to Dashboard</button></div>
+      </div>
+    </section>
+
+    <section class="page-panel" data-page-panel="about">
+      <div class="types-panel">
+        <div class="types-header">
+          <h3>ABOUT DRONOVA</h3>
+          <p>Dronova — Interactive 3D Drone Learning Application</p>
+        </div>
+        <div class="types-cards">
+          <article class="types-card">
+            <h4 class="types-card-title">Purpose</h4>
+            <p class="types-card-desc">Dronova is a Final Year Project built to teach the fundamentals of drone technology through hands-on, visual, interactive learning rather than static text alone.</p>
+          </article>
+          <article class="types-card">
+            <h4 class="types-card-title">Educational Objective</h4>
+            <p class="types-card-desc">Help learners understand what a drone is, how its components work together, and how basic flight is controlled — connecting theory (Learn), inspection (3D Lab), practice (Simulator), and assessment (Quiz) into one flow.</p>
+          </article>
+          <article class="types-card">
+            <h4 class="types-card-title">Target Users</h4>
+            <p class="types-card-desc">Students and hobbyists with no prior drone knowledge, educators looking for an interactive teaching aid, and anyone curious how multirotor drones actually work.</p>
+          </article>
+          <article class="types-card">
+            <h4 class="types-card-title">Main Features</h4>
+            <p class="types-card-desc">A 6-module Learning System, an interactive exploded-view 3D Drone Lab (77 real components), a physics-based Flight Simulator with guided training and missions, a randomized Quiz system, and a Progress &amp; Achievement dashboard.</p>
+          </article>
+          <article class="types-card">
+            <h4 class="types-card-title">Technologies Used</h4>
+            <p class="types-card-desc">Three.js (WebGL 3D rendering), vanilla JavaScript with no framework dependency, and browser localStorage for client-side progress persistence — no backend or account system required.</p>
+          </article>
+          <article class="types-card">
+            <h4 class="types-card-title">Educational Context</h4>
+            <p class="types-card-desc">Developed as a Final Year Project demonstrating applied web-based 3D visualization and interactive educational design for technical subject matter.</p>
+          </article>
+        </div>
+        <div class="page-links">
+          <button class="page-action-btn btn-tertiary" data-page-target="home">← Back to Dashboard</button>
+          <button class="page-action-btn" data-page-target="resources">View Resources &amp; Glossary</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="feature-grid">
+      <article class="card">
+        <img src="https://www.jotform.com/uploads/veencantwin23/form_files/WhatsApp%20Image%202026-07-23%20at%2020.37.30.6a620b1ec71803.71356332.jpeg" alt="Drone visual" />
+        <div class="inner">
+          <h2>3D Drone Model</h2>
+          <p>Inspect the drone from every angle with a fully animated 3D scene.</p>
+          <div class="tag">Interactive</div>
+        </div>
+      </article>
+      <article class="card">
+        <img src="https://www.jotform.com/uploads/veencantwin23/form_files/WhatsApp%20Image%202026-07-23%20at%2020.37.30.6a620b1ec71803.71356332.jpeg" alt="Drone components" />
+        <div class="inner">
+          <h2>3D Drone Components</h2>
+          <p>Reveal how each section works together and separate them in exploded mode.</p>
+          <div class="tag">Exploded View</div>
+        </div>
+      </article>
+      <article class="card">
+        <img src="https://www.jotform.com/uploads/veencantwin23/form_files/WhatsApp%20Image%202026-07-23%20at%2020.37.30.6a620b1ec71803.71356332.jpeg" alt="Quiz preview" />
+        <div class="inner">
+          <h2>Take a Quiz</h2>
+          <p>Challenge yourself to identify parts of the drone and their functions.</p>
+          <div class="tag">Learning</div>
+        </div>
+      </article>
+      <article class="card">
+        <img src="https://www.jotform.com/uploads/veencantwin23/form_files/WhatsApp%20Image%202026-07-23%20at%2020.37.30.6a620b1ec71803.71356332.jpeg" alt="About DRONOVA" />
+        <div class="inner">
+          <h2>About Us</h2>
+          <p>Learn the purpose of the project and how the experience was designed.</p>
+          <div class="tag">Story</div>
+        </div>
+      </article>
+    </section>
+    <footer class="dr-footer">
+      <div class="dr-footer-brand">
+        <div class="brand-title">DRON<span>OVA</span></div>
+        <div class="brand-sub">interactive drone learning</div>
+      </div>
+      <div class="dr-footer-cols">
+        <div class="dr-footer-col">
+          <div class="dr-footer-heading">Learn</div>
+          <button class="page-tab" data-page="intro">Introduction</button>
+          <button class="page-tab" data-page="types">Types</button>
+          <button class="page-tab" data-page="anatomy">Components</button>
+          <button class="page-tab" data-page="architecture">Architecture</button>
+          <button class="page-tab" data-page="mechanics">Flight</button>
+          <button class="page-tab" data-page="applications">Applications</button>
+        </div>
+        <div class="dr-footer-col">
+          <div class="dr-footer-heading">Explore</div>
+          <button class="page-tab" data-page="explorer">3D Lab</button>
+        </div>
+        <div class="dr-footer-col">
+          <div class="dr-footer-heading">Fly</div>
+          <button class="page-tab" data-page="simulator">Simulator</button>
+          <button class="page-tab" data-page="simulator">Search &amp; Rescue</button>
+        </div>
+        <div class="dr-footer-col">
+          <div class="dr-footer-heading">Assess</div>
+          <button class="page-tab" data-page="quiz">Quiz</button>
+          <button class="page-tab" data-page="progress">Progress</button>
+          <button class="page-tab" data-page="dashboard">My Learning</button>
+          <button class="page-tab" data-page="resources">Resources</button>
+        </div>
+        <div class="dr-footer-col">
+          <div class="dr-footer-heading">About</div>
+          <button class="page-tab" data-page="about">About DRONOVA</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-card">
+      <button class="modal-close" id="closeAuthModal" aria-label="Close auth dialog">×</button>
+      <h3 id="authModalTitle">Login to DRONOVA</h3>
+      <p id="authModalSubtitle">Enter your username and password to sign in and continue your learning journey.</p>
+      <div class="modal-field" id="authEmailField">
+        <label for="authEmail">Email address</label>
+        <input id="authEmail" type="email" placeholder="you@example.com" />
+      </div>
+      <div class="modal-field" id="authPasswordField">
+        <label for="authPassword">Password</label>
+        <input id="authPassword" type="password" placeholder="Enter your password" />
+      </div>
+      <div class="modal-actions" id="authActions">
+        <button class="primary" id="submitAuth">Login</button>
+        <button id="googleAuth">Continue with Google</button>
+        <button id="microsoftAuth">Continue with Microsoft</button>
+      </div>
+    </div>
+  </div>
+  <script src="./data/components_data.js"></script>
+  <script src="./data/learning_modules.js"></script>
+  <script src="./data/quiz_data.js"></script>
+  <script src="./data/glossary.js"></script>
+  <script src="./dronova_progress_core.js"></script>
+  <script src="./dronova_scene.js"></script>
+  <script src="./dronova_learn.js"></script>
+  <script src="./dronova_quiz.js"></script>
+  <script src="./dronova_progress_ui.js"></script>
+  <script src="./dronova_resources.js"></script>
+  <script>
+  (function(){
+    /* ============================================================
+       PHASE 10.2 — small, additive script for two things only:
+       1) header dropdown open/close (the actual nav links inside
+          are plain .page-tab buttons, already auto-wired by the
+          existing dronova_scene.js — this only toggles visibility)
+       2) rendering the "Your Learning Path" component from the
+          EXISTING, unmodified progress API (window.DronovaProgress.
+          getSnapshot()) — read-only, no progress calculation touched
+    ============================================================ */
+    var groups = Array.prototype.slice.call(document.querySelectorAll('[data-navgroup]'));
+    function closeAll(){
+      groups.forEach(function(g){
+        g.removeAttribute('data-open');
+        var btn = g.querySelector('.dr-navgroup-btn');
+        if(btn) btn.setAttribute('aria-expanded', 'false');
+      });
+    }
+    groups.forEach(function(g){
+      var btn = g.querySelector('.dr-navgroup-btn');
+      if(!btn) return;
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var wasOpen = g.getAttribute('data-open') === 'true';
+        closeAll();
+        if(!wasOpen){ g.setAttribute('data-open', 'true'); btn.setAttribute('aria-expanded', 'true'); }
+      });
+      Array.prototype.slice.call(g.querySelectorAll('.page-tab')).forEach(function(item){
+        item.addEventListener('click', function(){ closeAll(); });
+      });
+    });
+    document.addEventListener('click', closeAll);
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeAll(); });
+
+    var LEARN_SEQUENCE = [
+      {id:'intro', title:'Introduction'}, {id:'types', title:'Drone Types'},
+      {id:'anatomy', title:'Components'}, {id:'architecture', title:'Architecture'},
+      {id:'mechanics', title:'Flight'}, {id:'applications', title:'Applications'}
+    ];
+    function renderLearningPath(){
+      var containers = document.querySelectorAll('[data-learnpath]');
+      if(!containers.length) return;
+      var snapshot = null;
+      try { snapshot = window.DronovaProgress && window.DronovaProgress.getSnapshot(); } catch(e){}
+      var completedIds = {};
+      if(snapshot && snapshot.learning && snapshot.learning.modules){
+        snapshot.learning.modules.forEach(function(m){ if(m.complete) completedIds[m.id] = true; });
+      }
+      var currentPanel = document.querySelector('.page-panel.active');
+      var currentId = currentPanel ? currentPanel.dataset.pagePanel : null;
+      var html = '<span style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-right:6px;">Your Learning Path:</span>';
+      html += LEARN_SEQUENCE.map(function(step, i){
+        var done = !!completedIds[step.id];
+        var isCurrent = step.id === currentId;
+        var cls = isCurrent ? 'current' : (done ? 'done' : '');
+        var mark = done ? '✓' : (isCurrent ? '→' : '○');
+        return '<span class="dr-learnpath-item '+cls+'" data-page="'+step.id+'" style="cursor:pointer;">'+mark+' '+step.title+'</span>' +
+          (i < LEARN_SEQUENCE.length-1 ? '<span style="color:rgba(255,255,255,0.15);">/</span>' : '');
+      }).join('');
+      Array.prototype.slice.call(containers).forEach(function(c){ c.innerHTML = html; });
+      Array.prototype.slice.call(document.querySelectorAll('.dr-learnpath-item[data-page]')).forEach(function(item){
+        item.addEventListener('click', function(){ window.dronovaGoToPage && window.dronovaGoToPage(item.dataset.page); });
+      });
+    }
+    renderLearningPath();
+    Array.prototype.slice.call(document.querySelectorAll('.page-tab')).forEach(function(tab){
+      tab.addEventListener('click', function(){ setTimeout(renderLearningPath, 0); });
+    });
+    if(window.DronovaProgress){
+      var prevRefresh = window.DronovaProgress.refreshUI;
+      window.DronovaProgress.refreshUI = function(){
+        // Guarded: an error in the pre-existing renderer must not prevent
+        // our own re-render from happening (found via testing — without
+        // this try/catch, one throwing anywhere upstream would silently
+        // stop the Learning Path component from ever updating again).
+        try { if(typeof prevRefresh === 'function') prevRefresh(); } catch(e){}
+        renderLearningPath();
+      };
+    }
+
+    /* ============================================================
+       PHASE 10.5 — Student Dashboard render function. Reads ONLY
+       from the existing window.DronovaProgress API (Part 1) — no
+       new storage, no invented statistics (Part 18). Anything not
+       actually tracked (Search & Rescue mission history) is stated
+       honestly rather than faked.
+    ============================================================ */
+    function renderDashboard(){
+      var dashCard = document.getElementById('dashOverallCard');
+      if(!dashCard || !window.DronovaProgress) return;
+      var snap = null;
+      try { snap = window.DronovaProgress.getSnapshot(); } catch(e){}
+      if(!snap) return;
+
+      document.getElementById('dashOverallPct').textContent = snap.overallPct + '%';
+      document.getElementById('dashOverallBar').style.width = snap.overallPct + '%';
+      document.getElementById('dashOverallSub').textContent = snap.learning.completedCount + ' / ' + snap.learning.totalModules + ' learning topics completed';
+
+      var nextModule = snap.learning.modules.filter(function(m){ return !m.complete; })[0];
+      var continueBtn = document.getElementById('dashContinueBtn');
+      if(nextModule){
+        document.getElementById('dashContinueTitle').textContent = nextModule.icon + ' ' + nextModule.title;
+        continueBtn.textContent = 'Continue: ' + nextModule.title + ' →';
+        continueBtn.onclick = function(){ window.dronovaGoToPage(nextModule.id); };
+      } else {
+        document.getElementById('dashContinueTitle').textContent = '🎉 All learning topics completed!';
+        continueBtn.textContent = 'Review Learning →';
+        continueBtn.onclick = function(){ window.dronovaGoToPage('intro'); };
+      }
+
+      var completeSoFar = true;
+      var learnItems = snap.learning.modules.map(function(m){
+        var isCurrent = !m.complete && completeSoFar;
+        if(!m.complete) completeSoFar = false;
+        var cls = m.complete ? 'done' : (isCurrent ? 'current' : '');
+        var mark = m.complete ? '✓' : (isCurrent ? '→' : '○');
+        return '<div class="dr-dash-stage-item '+cls+'">'+mark+' '+m.title+'</div>';
+      }).join('');
+      var exploredAny = snap.learning.exploredComponents > 0;
+      var flightStarted = snap.simulator.learningModeComplete || snap.simulator.challengesCompleted > 0;
+      var quizStarted = snap.quiz.attemptsCount > 0;
+      document.getElementById('dashJourney').innerHTML =
+        '<div class="dr-dash-stage"><div class="dr-dash-stage-title">Learn</div>'+learnItems+'</div>'+
+        '<div class="dr-dash-stage"><div class="dr-dash-stage-title">Explore</div><div class="dr-dash-stage-item'+(exploredAny?' done':'')+'">'+(exploredAny?'✓ Explored '+snap.learning.exploredComponents+'/'+snap.learning.totalComponents+' components':'○ 3D Lab available')+'</div></div>'+
+        '<div class="dr-dash-stage"><div class="dr-dash-stage-title">Fly</div><div class="dr-dash-stage-item'+(flightStarted?' done':'')+'">'+(flightStarted?'✓ '+snap.simulator.challengesCompleted+'/'+snap.simulator.totalChallenges+' challenges':'○ Flight Simulator available')+'</div></div>'+
+        '<div class="dr-dash-stage"><div class="dr-dash-stage-title">Challenge</div><div class="dr-dash-stage-item">○ Search &amp; Rescue available</div></div>'+
+        '<div class="dr-dash-stage"><div class="dr-dash-stage-title">Assess</div><div class="dr-dash-stage-item'+(quizStarted?' done':'')+'">'+(quizStarted?'✓ '+snap.quiz.categoriesAttempted+'/'+snap.quiz.totalCategories+' categories tried':'○ Quiz available')+'</div></div>';
+
+      document.getElementById('dashModules').innerHTML = snap.learning.modules.map(function(m){
+        return '<div class="dr-dash-module"><span>'+m.icon+'</span><span style="flex:1;">'+m.title+'</span>'+
+          '<div class="dr-dash-module-bar"><div class="dr-dash-module-barfill" style="width:'+m.pct+'%"></div></div>'+
+          '<span class="dr-dash-module-pct">'+m.pct+'%</span></div>';
+      }).join('');
+
+      document.getElementById('dashQuizBody').innerHTML = quizStarted ?
+        ('<div class="dr-dash-stat-row"><span>Best Score</span><span>'+snap.quiz.bestOverall+'%</span></div>'+
+         '<div class="dr-dash-stat-row"><span>Average Score</span><span>'+snap.quiz.avgScore+'%</span></div>'+
+         '<div class="dr-dash-stat-row"><span>Attempts</span><span>'+snap.quiz.attemptsCount+'</span></div>'+
+         '<div class="dr-dash-stat-row"><span>Categories Tried</span><span>'+snap.quiz.categoriesAttempted+' / '+snap.quiz.totalCategories+'</span></div>')
+        : '<div class="dr-dash-empty">No quiz attempts yet. Take your first quiz to see your score here.</div>';
+
+      document.getElementById('dashFlightBody').innerHTML =
+        '<div class="dr-dash-stat-row"><span>Flight Academy</span><span>Available</span></div>'+
+        '<div class="dr-dash-stat-row"><span>Free Flight</span><span>Available</span></div>'+
+        '<div class="dr-dash-stat-row"><span>Learning Mode</span><span>'+(snap.simulator.learningModeComplete?'Completed':'Not started')+'</span></div>'+
+        '<div class="dr-dash-stat-row"><span>Flight Challenges</span><span>'+snap.simulator.challengesCompleted+' / '+snap.simulator.totalChallenges+'</span></div>';
+
+      // Phase 9.4F: this limitation from Phase 10.5 is now resolved — the
+      // simulator persists real rescue results to the same shared storage
+      // this dashboard already reads, so genuine history is shown here.
+      var rescueCompleted = snap.simulator.rescueMissionsCompleted > 0;
+      document.getElementById('dashRescueBody').innerHTML = rescueCompleted ?
+        ('<div class="dr-dash-stat-row"><span>Missions Completed</span><span>'+snap.simulator.rescueMissionsCompleted+'</span></div>'+
+         '<div class="dr-dash-stat-row"><span>Best Score</span><span>'+snap.simulator.rescueBestScore+' / 100 ('+snap.simulator.rescueBestGrade+')</span></div>'+
+         '<div class="dr-dash-stat-row"><span>Latest Score</span><span>'+snap.simulator.rescueLatestScore+' / 100</span></div>'+
+         '<div class="dr-dash-stat-row"><span>Rescue XP Earned</span><span>'+snap.simulator.rescueXP+'</span></div>')
+        : '<div class="dr-dash-empty">Search &amp; Rescue is available inside the simulator\'s Rescue Academy. Complete your first mission to see your score and XP here.</div>';
+
+      var achievements = [];
+      try { achievements = window.DronovaProgress.getAchievements(); } catch(e){}
+      document.getElementById('dashMilestones').innerHTML = achievements.length ?
+        achievements.map(function(a){ return '<div class="dr-dash-milestone'+(a.unlocked?' unlocked':'')+'">'+(a.unlocked?'✓':'○')+' '+a.icon+' '+a.title+'</div>'; }).join('')
+        : '<div class="dr-dash-empty">Complete lessons, quizzes and flight challenges to unlock milestones.</div>';
+
+      var recs = [];
+      try { recs = window.DronovaProgress.getRecommendations(); } catch(e){}
+      var nextStepEl = document.getElementById('dashNextStepBody');
+      if(recs.length){
+        var r = recs[0];
+        var targetPage = r.action.type === 'learn' ? r.action.target : (r.action.type === 'simulator' ? 'simulator' : (r.action.type === 'quiz' ? 'quiz' : 'progress'));
+        nextStepEl.innerHTML = '<div class="dr-dash-title">'+r.icon+' '+r.text+'</div><div class="dr-dash-sub">'+r.reason+'</div>';
+        var goBtn = document.createElement('button');
+        goBtn.className = 'page-action-btn btn-primary';
+        goBtn.style.marginTop = '10px';
+        goBtn.textContent = 'Go →';
+        goBtn.onclick = function(){ window.dronovaGoToPage(targetPage); };
+        nextStepEl.appendChild(goBtn);
+      } else {
+        nextStepEl.innerHTML = '<div class="dr-dash-empty">Start your first lesson to begin tracking your progress.</div>';
+      }
+
+      var welcomeEl = document.getElementById('dashWelcome');
+      if(snap.overallPct === 0) welcomeEl.textContent = "Welcome, Learner. Start your first lesson to begin tracking your progress.";
+      else if(snap.overallPct >= 100) welcomeEl.textContent = "Welcome back! You've completed the full DRONOVA learning path.";
+      else welcomeEl.textContent = "Welcome back, Learner. You're making progress through the DRONOVA learning path.";
+    }
+    renderDashboard();
+    Array.prototype.slice.call(document.querySelectorAll('.page-tab')).forEach(function(tab){
+      tab.addEventListener('click', function(){ setTimeout(renderDashboard, 0); });
+    });
+    if(window.DronovaProgress){
+      var prevRefresh2 = window.DronovaProgress.refreshUI;
+      window.DronovaProgress.refreshUI = function(){
+        try { if(typeof prevRefresh2 === 'function') prevRefresh2(); } catch(e){}
+        renderDashboard();
+      };
+    }
+
+    /* ============================================================
+       PHASE 10.4 — scroll reveal (Part 6), IntersectionObserver only,
+       reduced-motion aware. Targets only the major homepage sections
+       (.dr-reveal) — not every element, per the explicit instruction
+       not to animate everything. Each section reveals once and is
+       then unobserved (no repeated work on further scrolling).
+    ============================================================ */
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var revealEls = Array.prototype.slice.call(document.querySelectorAll('.dr-reveal'));
+    if(reduceMotion || !('IntersectionObserver' in window)){
+      // Motion-sensitive users (or a very old browser) get the content
+      // immediately visible rather than reliant on a scroll animation.
+      revealEls.forEach(function(el){ el.classList.add('dr-revealed'); });
+    } else {
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(entry){
+          if(entry.isIntersecting){
+            entry.target.classList.add('dr-revealed');
+            io.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.15 });
+      revealEls.forEach(function(el){ io.observe(el); });
+    }
+  })();
+  </script>
+</body>
+</html>
